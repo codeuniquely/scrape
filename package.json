@@ -1,0 +1,17 @@
+{
+  "name": "scrape",
+  "version": "1.0.0",
+  "description": "Scrape Imahe from web sites",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "author": "Steve Saxton, <steves@codeuniquely.co.uk>",
+  "license": "MIT",
+  "dependencies": {
+    "cheerio": "^1.0.0-rc.2",
+    "fast-csv": "^2.4.1",
+    "image-scraper": "^0.2.1",
+    "save": "^2.3.2"
+  }
+}
