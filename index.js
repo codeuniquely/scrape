@@ -32,6 +32,26 @@ function ensureWritePath() {
   }
 }
 
+function doesFileExist(file) {
+  return fs.existsSync(file);
+}
+
+function doesFileForIdExist(id) {
+  const jpg = path.resolve(__dirname, config.savePath, `image${id}.jpg`);
+  if (doesFileExist(jpg)) {
+    return `image${id}.jpg`;
+  }
+  const png = path.resolve(__dirname, config.savePath, `image${id}.jpg`);
+  if (doesFileExist(png)) {
+    return `image${id}.png`;
+  }
+  const gif = path.resolve(__dirname, config.savePath, `image${id}.jpg`);
+  if (doesFileExist(gif)) {
+    return `image${id}.gif`;
+  }
+  return;
+}
+
 function getImage(id, imageUrl, callback){
   var parsedUrl = url.parse(imageUrl);
 
@@ -53,6 +73,11 @@ function getImage(id, imageUrl, callback){
   // Make a reference to the current instance.
   const savedPath = path.resolve(__dirname, config.savePath, filename);
 
+  // if the file is already downloaded
+  if (doesFileExist(savedPath)) {
+    return callback(filename);
+  }
+
   // WHAT IS THE IMAGE
   // const reqImageUrl = '' + `${download}`;
   // console.log('Getting image', download.replace(config.site, '...'));
@@ -60,6 +85,7 @@ function getImage(id, imageUrl, callback){
   var request = protocol.request(download, response => {
     if(response.statusCode != 200){
       console.error(`scrape(3): Error Image, (statusCode: + ${response.statusCode}), ${download}`);
+      callback('missing.jpg');
       // return request.end();
     } else {
       var imageFile = fs.createWriteStream(savedPath);
@@ -78,10 +104,16 @@ function getImage(id, imageUrl, callback){
   request.end();
   request.on('error', e => {
     console.error(`scrape(5): Error while loading image: ${e}.`);
+    callback('missing.jpg');
   });
 };
 
 function scrape(id, website, callback) {
+  const exists = doesFileForIdExist(id);
+  if (exists) {
+    return callback(exists);
+  }
+
   const parsedUrl = url.parse(website);
 
   // Support HTTPS.
