@@ -1,249 +1,96 @@
-var fs = require("fs");
-var http = require("http");
-var https = require("https");
 var path = require("path");
-var url = require("url");
-
-// third party libs
-var cheerio = require("cheerio");
-var csv = require('fast-csv');
-
 const config = require('./config.js');
+
+// local modules
+const Files = require('./files');
+const Records = require('./records');
+const Missing = require('./missing');
+const Download = require('./download');
+const ProgressBar = require('./report');
 
 const savePath = path.resolve(__dirname, config.savePath);
 
-// processed record count
-let records = 0;
+// maximum nuber fo records to process
+const maxRecords = 12; // undefined; // 1000;
 
-// Processing data
-let header = [];
-let processedRecords = [];
+function processAllRecords(done) {
+  // How many records where loaded
+  const count = Records.count;
 
-// Functions
-// ===================
-function clearArray() {
-  processedRecords = [];
-}
+  // How many records will be processed
+  const willStopAt = maxRecords ? maxRecords : count;
 
-function ensureWritePath() {
-  const writePath = path.resolve(__dirname, config.savePath);
-  if (!fs.existsSync(writePath)) {
-    fs.mkdirSync(writePath);
-  }
-}
-
-function doesFileExist(file) {
-  return fs.existsSync(file);
-}
-
-function doesFileForIdExist(id) {
-  const jpg = path.resolve(__dirname, config.savePath, `image${id}.jpg`);
-  if (doesFileExist(jpg)) {
-    return `image${id}.jpg`;
-  }
-  const png = path.resolve(__dirname, config.savePath, `image${id}.jpg`);
-  if (doesFileExist(png)) {
-    return `image${id}.png`;
-  }
-  const gif = path.resolve(__dirname, config.savePath, `image${id}.jpg`);
-  if (doesFileExist(gif)) {
-    return `image${id}.gif`;
-  }
-  return;
-}
-
-function getImage(id, imageUrl, callback){
-  var parsedUrl = url.parse(imageUrl);
-
-  // Support HTTPS.
-  let protocol = http;
-  if(parsedUrl.protocol === "https:") {
-    protocol = https;
-  }
-
-  // get the file type - Just SMASH it all together - no checks
-  const noquery = parsedUrl.href.replace(`?${parsedUrl.query}`, '');
-  const download = noquery.replace(config.trimTail, '');
-  const postdot = download.split('.').pop(); // .png
-  const ext = postdot.split('?')[0].toLowerCase();
-
-  // build the writeable filename
-  const filename = `image${id}.${ext}`;
-
-  // Make a reference to the current instance.
-  const savedPath = path.resolve(__dirname, config.savePath, filename);
-
-  // if the file is already downloaded
-  if (doesFileExist(savedPath)) {
-    return callback(filename);
-  }
-
-  // WHAT IS THE IMAGE
-  // const reqImageUrl = '' + `${download}`;
-  // console.log('Getting image', download.replace(config.site, '...'));
-
-  var request = protocol.request(download, response => {
-    if(response.statusCode != 200){
-      console.error(`scrape(3): Error Image, (statusCode: + ${response.statusCode}), ${download}`);
-      callback('missing.jpg');
-      // return request.end();
-    } else {
-      var imageFile = fs.createWriteStream(savedPath);
-      imageFile.on('error', function(e){
-        console.error(`scrape(4): error while loading image: ${e}.`);
-      });
-      response.on('data', data => {
-        imageFile.write(data);
-      });
-      response.on('end', () => {
-        imageFile.end();
-        callback(filename);
-      });
-    }
-  });
-  request.end();
-  request.on('error', e => {
-    console.error(`scrape(5): Error while loading image: ${e}.`);
-    callback('missing.jpg');
-  });
-};
-
-function scrape(id, website, callback) {
-  const exists = doesFileForIdExist(id);
-  if (exists) {
-    return callback(exists);
-  }
-
-  const parsedUrl = url.parse(website);
-
-  // Support HTTPS.
-  let protocol = http;
-  if(parsedUrl.protocol == "https:") {
-    protocol = https;
-  }
-
-  let request = protocol.request(website, response => {
-    if(response.statusCode === 200){
-      response.setEncoding('utf8');
-
-      let page = '';
-      response.on('data', data => {
-        page += data;
-      });
-
-      // Once the wholepage is loaded
-      response.on('end', function() {
-        // stick the page into a cheerio DOM doc
-        const $ = cheerio.load(page);
-
-        // Target the Image DOM node required
-        const target = $(`${config.target}`);
-        if (target.length > 0) {
-          const imageUrl = target[0].attribs.href;
-          if (imageUrl) {
-            getImage(id, imageUrl, callback);
-          } else {
-            console.log('No HREF for target', target[0]);
-            callback('missing.jpg');
-          }
-        } else {
-          console.log('No IMAGE for', website);
-          callback('missing.jpg');
-        }
-      });
-    } else {
-      console.error(`scrape(1): Error (statusCode: ${response.statusCode}), ${website}`);
-      callback('missing.jpg');
-    }
-  });
-
-  request.on('error', function(e){
-    console.error(`scrape(2): Error while loading web page: ${e}.`);
-  });
-
-  request.end();
-};
-
-function buildRecord(data) {
-  const record = {};
-  for(let i=0 ; i<header.length ; i++) {
-    let name = header[i].toLowerCase();
-    let value = data[i];
-    if (i === config.urlColumn) {
-      const page = data[config.urlColumn];
-      name = 'webpage';
-      value = `${config.site}${page.replace('\\\/', '')}`;
-    }
-    record[name] = value;
-  }
-  record.filename = '';
-  return record;
-}
-
-// \/Thomas_Sorenson_(Earth-616) => Thomas_Sorenson_(Earth-616)
-function processRecord(data) {
-  if (records === 0) {
-    header = data;
-  } else {
-    processedRecords.push(buildRecord(data));
-  }
-  records++;
-}
-
-function downloadImages(done) {
-  console.log('Starting download...');
   function processRecord(index) {
-    if (index === processedRecords.length) {
-      console.log('Completed download.');
+    if (index === willStopAt) {
+      // ============================================
+      // ALL DOWNLOAD PROCESSING IS NOW COMPLETE HERE
+      // ============================================
+      console.log(`processed ${willStopAt} records`);
       return done();
     }
-    const record = processedRecords[index];
+
+    if (index === 10) {
+      debugger;
+    }
+
+    const where = `${index}/${count}`;
+
+    const record = Records.get(index);
     const id = record[config.idColumn];
-    scrape(id, record.webpage, filename => {
-      processedRecords[index].filename = filename;
+
+    // does an image aready exist for this id
+    const filename = Files.doesFileForIdExist(id);
+    const missing = Missing.exists(id);
+
+    if (filename) {
+      ProgressBar.already(where, 1);
+      Records.update(where, index, filename);
+      ProgressBar.tick(1);
       processRecord(index + 1);
-    });
+    } else if (missing) {
+      ProgressBar.missing(where, 1);
+      Records.update(where, index, 'missing.jpg');
+      ProgressBar.tick(1);
+      processRecord(index + 1);
+    } else {
+      Download.scrape(where, id, record.webpage, (err, filename) => {
+        if(err) {
+          filename = 'missing.jpg';
+          Missing.update(where, { id:id, msg: err });
+        }
+        Records.update(where, index, filename);
+        processRecord(index + 1);
+      });
+    }
   }
+
+  // loop
   processRecord(0);
 }
 
-// loop through all teh record and write them to a csv
-function saveNewCSV() {
-  const filename = path.resolve(__dirname, config.savePath, 'processed.csv');
-  const csvStream = csv.format({ headers: true });
-  const writableStream = fs.createWriteStream(filename);
+function loadMissing(callback) {
+  Missing.init(config);
+  Missing.load(callback);
+}
 
-  writableStream.on('finish', () => {
-    console.log(`processed ${records} records`);
-    console.log('Finished!'); // eslint-disable-line no-console
-  });
-
-  csvStream.pipe(writableStream);
-  for(let i = 0; i < processedRecords.length; i++) {
-    const record = processedRecords[i];
-    csvStream.write(record);
-  }
-
-  csvStream.end();
+function loadRecords(callback) {
+  Records.init(config);
+  Records.load(callback)
 }
 
 function run () {
-  // clear down the array
-  clearArray();
-  ensureWritePath();
-
-  csv.fromPath(config.file)
-    .on('data', data => {
-      processRecord(data);
-    })
-    .on('end', function(){
-      console.log('CSV ENDS');
-      downloadImages(() => {
-        saveNewCSV();
+  Files.ensureWritePath();
+  loadMissing(() => {
+    loadRecords(() => {
+      console.log('Starting download...');
+      processAllRecords(() => {
+        Records.save(() => {
+          console.log('Finished!'); // eslint-disable-line no-console
+        });
       });
     });
+  });
 }
 
-// Args
-// scrape [options.json]
+// run the app
 run();
