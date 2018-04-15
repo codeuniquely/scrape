@@ -26,6 +26,10 @@
       if (exists(jpg)) {
         return `image${id}.jpg`;
       }
+      const jpeg = path.resolve(__dirname, config.savePath, `image${id}.jpeg`);
+      if (exists(jpeg)) {
+        return `image${id}.jpeg`;
+      }
       const png = path.resolve(__dirname, config.savePath, `image${id}.png`);
       if (exists(png)) {
         return `image${id}.png`;
