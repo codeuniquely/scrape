@@ -11,7 +11,7 @@ const ProgressBar = require('./report');
 const savePath = path.resolve(__dirname, config.savePath);
 
 // maximum nuber fo records to process
-const maxRecords = 12; // undefined; // 1000;
+const maxRecords = undefined; // 1000;
 
 function processAllRecords(done) {
   // How many records where loaded

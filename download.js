@@ -1,6 +1,3 @@
-//
-//
-//
 (function(){
 
   const path = require("path");
@@ -16,7 +13,7 @@
 
   // get the image from the site
   // ===========================
-  function getImage(index, id, imageUrl, callback){
+  function getImage(where, id, imageUrl, callback){
     var parsedUrl = url.parse(imageUrl);
 
     // Support HTTPS.
@@ -43,10 +40,7 @@
         stream.on('error', e => {
           callback(`Error: loading image: ${e}`);
         });
-
-        console.log('**** DOWNLOADING ****'); // eslint-disable-line no-console
-
-        const len = parseInt(res.headers['content-length'], 10);
+        const len = parseInt(response.headers['content-length'], 10);
         ProgressBar.downloading(where, len);
         response.on('data', data => {
           Files.write(stream, data);
