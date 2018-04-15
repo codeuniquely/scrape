@@ -29,10 +29,6 @@ function processAllRecords(done) {
       return done();
     }
 
-    if (index === 10) {
-      debugger;
-    }
-
     const where = `${index}/${count}`;
 
     const record = Records.get(index);
@@ -78,11 +74,37 @@ function loadRecords(callback) {
   Records.load(callback)
 }
 
+function buildIndex(done) {
+  const count = Records.count;
+  for(let index = 0; index < count; index++) {
+    const where = `${index}/${count}`;
+    const record = Records.get(index);
+    const id = record[config.idColumn];
+    const filename = Files.doesFileForIdExist(id);
+    if (filename) {
+      ProgressBar.already(where, 1);
+      Records.update(where, index, filename);
+      ProgressBar.tick(1);
+    } else {
+      ProgressBar.missing(where, 1);
+      Records.update(where, index, 'missing.jpg');
+      ProgressBar.tick(1);
+    }
+  }
+  console.log(`processed ${count} records`);
+  done();
+}
+
 function run () {
   Files.ensureWritePath();
   loadMissing(() => {
     loadRecords(() => {
       console.log('Starting download...');
+      // buildIndex(() => {
+      //   Records.save(() => {
+      //     console.log('Finished!'); // eslint-disable-line no-console
+      //   });
+      // });
       processAllRecords(() => {
         Records.save(() => {
           console.log('Finished!'); // eslint-disable-line no-console
